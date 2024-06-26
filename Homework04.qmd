@@ -1,0 +1,344 @@
+---
+title: "ST558 - Homework #4"
+author: "Brock Akerman"
+format: html
+---
+
+```{r library_config, output=F}
+require(httr)
+require(jsonlite)
+require(purrr)
+require(dplyr)
+```
+
+ 
+### Task 1:  Conceptual Questions\
+
+**1. What is the purpose of the `lapply()` function? What is the equivalent _purrr_ function?**
+
+The `lapply()` function is used to apply a function to each element of a list/vector and return a result.  It is as an alternative, and sometimes quicker, method to writing out a function.  The _purr_ equivalent of lapply is 'map()'.  
+
+**2. Suppose we have a list called my_list. Each element of the list is a numeric data frame (all columns are numeric). We want use `lapply()` to run the code `cor(numeric_matrix, method = "kendall")` on each element of the list. Write code to do this below! (I’m really trying to ask you how you specify method = "kendall" when calling `lapply()`)**
+
+```{r, eval=F}
+
+lapply(my_list, function(x) cor(x, method = "kendall"))
+
+```
+
+**3. What are two advantages of using purrr functions instead of the BaseR apply family?**
+
+Drawing answers from the Hadley Stack Overflow post, two advantages of using _purrr_ over the `*apply` family of functions include:
+
+* Shorthand writing, a more concise method of writing code for what you want.  `map()` produces the exact  output as `apply()` but with fewer characters and fewer functional arguments.  For example:  
+
+```{r, eval=T}
+#apply(mtcars, 2, mean)
+app <- nchar("apply(mtcars, 2, mean)")
+
+#map_dbl(mtcars, mean)
+map <- nchar("map_dbl(mtcars, mean)")
+
+data.frame(cbind(app, map))
+```
+
+* Purrr function variants.  There are many but the `walk()` variant seems very useful for situations where we would be disinterested in data output but still want to perform that action invisibly.  An example of this would be wanting to write many dataframes to a delimited file while assuming we are using tidyverse piping in a function.  Ordinarily, we would call `return()`; however, since we are not concerned with the output but rather the action to be performed--the action of writing being the side-effect of calling `walk()`--`walk()` would serve to bridge the gap of piping in the tidyverse and writing to disk without showing the returned frames.
+
+**4. What is a side-effect function?**
+
+A side-effect function is a programming function that performs an action invisibly by not returning the original data value.  Its common usages include writing data to disk and plotting data without a return.  
+
+**5. Why can you name a variable _sd_ in a function and not cause any issues with the _sd_ function?**
+
+When a function contains a name for a variable, in this case _sd_ as a var, and that function is called it does not store the name of that variable in the global environment.  Instead, it is stored in a temporary environment that is called during the running of that function and then it is forgotten.  
+
+### Task 2 - Writing R Functions\
+
+**1.** When we start doing machine learning later in the course, a common metric used to evaluate predictions is called Root Mean Square Error (RMSE).
+
+For a given set of responses, $y1,...,yn$ (variable of interest that we want to predict) and a set of corresponding predictions for those observations, $\hat{y_1},..., \hat{y_n}$ the RMSE is defined as:
+
+\begin{gather*}RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y_i})^2}
+\end{gather*}
+
+**Write a basic function (call it `getRMSE()`) that takes in a _vector_ of responses and a _vector_ of predictions and outputs the RMSE.** **If a value is missing for the vector of responses (i.e. an NA is present), allow for additional arguments to the `mean()` function (elipses) that removes the NA values in the computation.**\
+
+Since we want a set of $y_n$ and a corresponding set of $\hat{y}_n$, we need a check to see that the length of each response and predictor is equal.  In my function, I included a call to `stop()` in the event that predictor and response were not corresponding. The second part of the function is the formula for RMSE.   
+
+
+```{r, eval=T}
+getRMSE <- function(responses, predictions, ...) {
+  #Formulation for RMSE with a call to return.  Includes ... argument to pass an NA check.
+  rmse <- sqrt(mean((responses - predictions)^2, ...)) # ... = na.rm = TRUE to strip NA from responses vector
+  return(rmse)
+}
+```
+
+**2. Run the following code to create some response values and predictions.**
+
+I changed the default input arguments from the homework pdf to match environment variables in my getRMSE function. 
+
+```{r}
+set.seed(10)
+ n <- 100
+ x <- runif(n)
+ responses <- 3 + 10*x + rnorm(n)
+ predictions <- predict(lm(responses ~ x), data.frame(x))
+```
+
+**• Test your RMSE function using this data.**\
+
+```{r}
+#Call the function with the appropriate arguments
+getRMSE(responses, predictions)
+```
+
+**• Repeat after replacing two of the response values with missing values (NA_real_).**
+
+```{r}
+#Manufacture case where two values are NA.  Second query checks that the NA call flowed through. 
+responses[32:33] = NA
+sum(is.na(responses))
+```
+
+**– Test your RMSE function with and without specifying the behavior to deal with missing values.**
+
+```{r}
+#Call the function with the appropriate arguments without additional arg -> na.rm = TRUE
+getRMSE(responses, predictions)
+
+#Call the function with the appropriate arguments with additional arg -> na.rm = TRUE
+getRMSE(responses, predictions, na.rm = TRUE)
+```
+
+**3.** Another common metric for evaluating predictions is mean absolute deviation given by:
+
+\begin{gather*}MAE = \frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y_i}|
+\end{gather*}
+
+**Write a function called `getMAE()` that follows the specifications of the `getRMSE()` function.**
+
+```{r}
+getMAE <- function(responses, predictions, ...) {
+  #Formulation for MAE with a call to return.  Includes ... argument to pass an NA check.
+  mae <- sqrt(mean(abs(responses - predictions), ...)) # ... = na.rm = TRUE to strip NA from responses vector
+  return(mae)
+}
+```
+
+**4. Run the following code to create some response values and predictions.**
+
+I changed the default input arguments from the homework pdf to match environment variables in my getRMSE function.
+
+```{r}
+set.seed(10)
+n <- 100
+x <- runif(n)
+responses <- 3 + 10*x + rnorm(n)
+predictions <- predict(lm(responses ~ x), data.frame(x))
+```
+
+**• Test your MAE function using this data.**\
+```{r}
+#Call the function with the appropriate arguments
+getMAE(responses, predictions)
+```
+
+**• Repeat after replacing two of the response values with missing values (NA_real_).**\
+```{r}
+#Manufacture case where two values are NA.  Second query checks that the NA call flowed through. 
+responses[79:80] = NA
+sum(is.na(responses))
+```
+
+**– Test your MAE function with and without specifying the behavior to deal with missing values.**\
+```{r}
+#Call the function with the appropriate arguments without additional arg -> na.rm = TRUE
+getMAE(responses, predictions)
+
+#Call the function with the appropriate arguments with additional arg -> na.rm = TRUE
+getMAE(responses, predictions, na.rm = TRUE)
+```
+
+**5. Let’s create a wrapper function that can be used to get either or both metrics returned with a single function call. Do not rewrite your above two functions, call them inside the wrapper function (we would call the `getRMSE()` and `getMAE()` functions helper functions). When returning your values, give them appropriate names.**
+
+**• The function should check that two numeric (atomic) vectors have been passed (consider `is.vector()`, `is.atomic()`, and `is.numeric()`). If not, a message should print and the function should exit.**
+
+**• The function should return both metrics by default and include names. The behavior should be able to be changed using a character string of metrics to find.**
+
+My wrapper function is going to follow the same input arguments as the getRMSE and getMAE functions with the addition of a argument called "metrics".  This argument can accept RMSE or MAE, or it can completely ignored in which case my code will return output from both functions.  The ellipses argument exists to accept the na.rm argument to reconcile  scenarios where there are NA values in the response vector
+
+```{r}
+getMetrics <- function(responses, predictions, metrics = c("RMSE", "MAE"), ...) {
+  # Check if inputs are numeric and vectors
+  if (!is.vector(responses) || !is.numeric(responses)) {
+    stop("responses must be a numeric vector")
+  }
+  if (!is.vector(predictions) || !is.numeric(predictions)) {
+    stop("predictions must be a numeric vector")
+  }
+  
+  # Initialize an empty list to store results
+  results <- list()
+  
+  # Check if RMSE is requested
+  if ("RMSE" %in% metrics) {
+    results$RMSE <- getRMSE(responses, predictions, ...)
+  }
+  
+  # Check if MAE is requested
+  if ("MAE" %in% metrics) {
+    results$MAE <- getMAE(responses, predictions, ...)
+  }
+  
+  # Return the results list
+  return(results)
+}
+```
+
+**6. Run the following code to create some response values and predictions.**
+```{r}
+set.seed(10)
+n <- 100
+x <- runif(n)
+responses <- 3 + 10*x + rnorm(n)
+predictions <- predict(lm(responses ~ x), data.frame(x))
+```
+
+**• Test your new function using this data. Call it once asking for each metric individually and once specifying both metrics**\
+
+```{r}
+#RMSE only
+getMetrics(responses, predictions, "RMSE")
+
+#MAE only
+getMetrics(responses, predictions, "MAE")
+
+#Both, by not calling on the metric argument.  
+getMetrics(responses, predictions)
+```
+
+**• Repeat with replacing two of the response values with missing values (NA_real_).**\
+
+```{r}
+#Manufacture case where two values are NA.  Second query checks that the NA call flowed through. 
+responses[2:3] = NA
+sum(is.na(responses))
+```
+
+**• Finally, test your function by passing it incorrect data (i.e. a data frame or something else instead of vectors)**\
+
+```{r}
+#This forces a response and prediction vector into a data.frame giving it a new object. 
+responses_df <- as.data.frame(responses)
+predictions_df <- as.data.frame(predictions)
+```
+
+
+```{r, error=T}
+#The dataframe are called to the function arguments correctly forcing an error.  
+getMetrics(responses_df, predictions_df)
+```
+
+
+
+### Task 3- Querying an API and a Tidy-Style Function
+For this section, you’ll connect to the news API here: newsapi.org. You’ll need to go to register for a key at that web site!
+
+**1. Use `GET()` from the httr package to return information about a topic that you are interested in that has been in the news lately (store the result as an R object). Note: We can only look 30 days into the past with a free account.**
+
+First I set several objects in my environment.  The api_key was given to me from the NewsAPI website after signing up with an account. I choose NVIDIA due to their rising stock prices the last two quarters.  For the date, I used Sys.Date to collect todays date and subtract 30 from it.  The licensing agreement only allows for a 30 day lookback and figured something like that should be dynamic. I found a paste-URL format for creating a URL from a simple Google search. I would call the GET() function and place all the objects relevant inside as arguments. 
+
+```{r}
+#Set up objects
+api_key <- 'f0f1d686cc0b480c9d1e33dd5c150e25'
+topic <- "ClimateChange"
+from_date <- Sys.Date() - 30
+url <- paste0("https://newsapi.org/v2/everything?q=", topic, "&from=", from_date, "&sortBy=publishedAt&apiKey=", api_key)
+
+Get_URL_Response <- httr::GET(url)
+
+# Notes to self: JSON format appears when "url", Get_URL_Repsonse is called.
+
+# extra helper code for quick checks
+# str(response, max.level=1)
+
+```
+
+
+**2. Parse what is returned and find your way to the data frame that has the actual article information in it (check content). Note the first column should be a list column!**
+
+```{r}
+#Parse data using content()
+ResponseContentParsed <- content(Get_URL_Response,"parsed")
+#Called on articles from the parse data and assigned it an object to work with it easier. 
+articles <- ResponseContentParsed$articles
+
+
+#Had some issues here.  I kept receiving error message: 
+
+#Error in (function (..., row.names = NULL, check.rows = FALSE, check.names = TRUE,  : 
+#arguments imply differing number of rows: 0, 1
+
+#Google Searched my way through the problem--somewhat.  I retrieved some of these queries to help get the answer I wanted.  
+
+# Check lengths and filter out empty elements
+lengths <- sapply(articles, length)
+non_empty_articles <- articles[lengths > 0]
+
+# Convert non-empty elements to data frames
+df_list <- lapply(non_empty_articles, function(x) {
+  tryCatch(
+    as.data.frame(x, stringsAsFactors = FALSE),
+    error = function(e) NULL
+  )
+})
+
+# Filter out NULL elements resulting from errors
+df_list <- Filter(function(x) !is.null(x), df_list)
+
+# Inspect the resulting list of data frames
+str(df_list)
+
+
+
+```
+
+**3. Now write a quick function that allows the user to easily query this API. The inputs to the function should be the title/subject to search for (string), a time period to search from (string- you’ll search from that time until the present), and an API key. Use your function twice!**
+
+```{r, error=T}
+library(httr)
+
+API_call <- function(title, time, api_key) {
+  # Root URL to base the website from.
+  rootURL <- "https://newsapi.org/v2/everything"
+  
+  # Convert time to string in the required format
+  time_str <- format(time, "%Y-%m-%d")
+  
+  # URL input 
+  URL_elements <- list(
+    q = title,
+    from = time_str,
+    apiKey = api_key
+  )
+  
+  # Create the URL
+  response <- GET(url = rootURL, query = URL_elements)
+  
+  # Check if request was successful (status code 200)
+  if (http_status(response)$status == 200) {
+    # Parse the JSON response
+    data <- content(response, "parsed")
+    return(data)
+  } else {
+    # If request failed, print error message
+    stop(paste("HTTP error:", http_status(response)$reason))
+  }
+}
+
+# Example usage
+API_call("Lisinopril", as.Date("2024-06-25"), "f0f1d686cc0b480c9d1e33dd5c150e25")
+API_call("Ozempic", as.Date("2024-06-25"), "f0f1d686cc0b480c9d1e33dd5c150e25")
+```
+
